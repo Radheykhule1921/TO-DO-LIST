@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Colorful Academic Planner</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #taskList {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .task-title {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 min-vh-100 d-flex flex-column align-items-center py-5 font-sans">
+  <div class="container bg-white rounded shadow-lg p-4 p-md-5" style="max-width: 700px;">
+    <h1 class="text-center fw-bold mb-4 text-purple-700">🎓 Academic Planner</h1>
+    <p class="text-center mb-4 text-gray-700">
+      Manage your academic tasks efficiently:<br />
+      Add, view, prioritize, mark complete, update or delete tasks.
+    </p>
+    <form id="taskForm" class="row g-3 mb-4" onsubmit="return false;">
+      <div class="col-12 col-md-7">
+        <input
+          type="text"
+          id="title"
+          class="form-control"
+          placeholder="Enter academic task title"
+          required
+        />
+      </div>
+      <div class="col-12 col-md-3">
+        <select id="priority" class="form-select" required>
+          <option value="" disabled selected>Priority</option>
+          <option value="High">High 🔴</option>
+          <option value="Medium">Medium 🟠</option>
+          <option value="Low">Low 🟢</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-grid">
+        <button type="submit" class="btn btn-gradient text-white shadow-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+          Add Task
+        </button>
+      </div>
+    </form>
+    <div id="errorBox" class="alert alert-danger d-none" role="alert"></div>
+    <ul id="taskList" class="list-group overflow-auto shadow-sm" style="max-height: 400px;"></ul>
+  </div>
+  <script>
+    let tasks = [];
+    let editTaskId = null;
+
+    const priorityClasses = {
+      High: 'bg-danger text-white',
+      Medium: 'bg-warning text-dark',
+      Low: 'bg-success text-white',
+    };
+
+    const form = document.getElementById('taskForm');
+    const titleInput = document.getElementById('title');
+    const priorityInput = document.getElementById('priority');
+    const taskList = document.getElementById('taskList');
+    const errorBox = document.getElementById('errorBox');
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.classList.remove('d-none');
+    }
+
+    function clearError() {
+      errorBox.textContent = '';
+      errorBox.classList.add('d-none');
+    }
+
+    function renderTasks() {
+      const priorityOrder = { High: 1, Medium: 2, Low: 3 };
+      tasks.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      });
+
+      taskList.innerHTML = '';
+
+      if (tasks.length === 0) {
+        taskList.innerHTML = `<li class="list-group-item text-center text-muted fst-italic">No academic tasks added yet.</li>`;
+        return;
+      }
+
+      tasks.forEach((task) => {
+        const li = document.createElement('li');
+        li.className = `list-group-item d-flex justify-content-between align-items-center
+          ${task.completed ? 'opacity-60 text-decoration-line-through' : ''}
+          hover:shadow-md transition-shadow rounded`;
+
+        const leftDiv = document.createElement('div');
+        leftDiv.className = 'd-flex align-items-center gap-3';
+        leftDiv.title = "Click task title to mark complete/incomplete";
+        leftDiv.style.flex = '1';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = task.title;
+        titleSpan.className = 'fs-5 task-title';
+        titleSpan.onclick = () => toggleComplete(task.id);
+
+        const badge = document.createElement('span');
+        badge.textContent = task.priority;
+        badge.className = `badge rounded-pill ms-3 px-3 py-2 ${priorityClasses[task.priority]}`;
+
+        leftDiv.appendChild(titleSpan);
+        leftDiv.appendChild(badge);
+
+        const btnGroup = document.createElement('div');
+        btnGroup.className = 'btn-group btn-group-sm';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-warning text-white';
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          startEdit(task.id);
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-danger';
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          deleteTask(task.id);
+        };
+
+        btnGroup.appendChild(editBtn);
+        btnGroup.appendChild(delBtn);
+
+        li.appendChild(leftDiv);
+        li.appendChild(btnGroup);
+
+        taskList.appendChild(li);
+      });
+    }
+
+    function addOrUpdateTask() {
+      clearError();
+      const title = titleInput.value.trim();
+      const priority = priorityInput.value;
+
+      if (!title) {
+        showError('Task title cannot be empty.');
+        return;
+      }
+      if (!priority) {
+        showError('Please select a priority.');
+        return;
+      }
+
+      if (editTaskId !== null) {
+        const task = tasks.find((t) => t.id === editTaskId);
+        if (task) {
+          task.title = title;
+          task.priority = priority;
+        }
+        editTaskId = null;
+        form.querySelector('button[type="submit"]').textContent = "Add Task";
+      } else {
+        tasks.push({
+          id: Date.now(),
+          title,
+          priority,
+          completed: false,
+        });
+      }
+
+      form.reset();
+      renderTasks();
+    }
+
+    function startEdit(id) {
+      clearError();
+      const task = tasks.find((t) => t.id === id);
+      if (!task) return;
+      titleInput.value = task.title;
+      priorityInput.value = task.priority;
+      editTaskId = id;
+      form.querySelector('button[type="submit"]').textContent = "Update Task";
+    }
+
+    function toggleComplete(id) {
+      const task = tasks.find((t) => t.id === id);
+      if (!task) return;
+      task.completed = !task.completed;
+      renderTasks();
+    }
+
+    function deleteTask(id) {
+      tasks = tasks.filter((t) => t.id !== id);
+      if (editTaskId === id) {
+        editTaskId = null;
+        form.reset();
+        form.querySelector('button[type="submit"]').textContent = "Add Task";
+      }
+      renderTasks();
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      addOrUpdateTask();
+    });
+
+    renderTasks();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
